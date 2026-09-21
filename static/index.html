@@ -1,0 +1,473 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>ParkManager Enterprise Pro</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.0/font/bootstrap-icons.css">
+    <style>
+        body {
+            background: linear-gradient(135deg, #090d16 0%, #111827 100%);
+            color: #f3f4f6;
+            min-height: 100vh;
+            font-family: 'Segoe UI', system-ui, -apple-system, sans-serif;
+        }
+        .glass-card {
+            background: rgba(17, 24, 39, 0.75);
+            backdrop-filter: blur(16px);
+            border: 1px solid rgba(255, 255, 255, 0.08);
+            border-radius: 16px;
+            box-shadow: 0 10px 30px rgba(0, 0, 0, 0.5);
+        }
+        .stat-card { transition: transform 0.2s ease, box-shadow 0.2s ease; }
+        .stat-card:hover { transform: translateY(-3px); box-shadow: 0 12px 28px rgba(0, 0, 0, 0.6); }
+        .table-custom { --bs-table-bg: transparent; --bs-table-color: #f3f4f6; border-color: rgba(255, 255, 255, 0.08); }
+        .form-control, .form-select {
+            background-color: rgba(31, 41, 55, 0.7);
+            border: 1px solid rgba(255, 255, 255, 0.15);
+            color: #fff;
+        }
+        .form-control:focus, .form-select:focus {
+            background-color: rgba(31, 41, 55, 0.95);
+            color: #fff;
+            border-color: #3b82f6;
+            box-shadow: 0 0 0 0.25rem rgba(59, 130, 246, 0.25);
+        }
+        .form-control::placeholder { color: #6b7280; }
+        .btn-entrada { background: linear-gradient(135deg, #10b981 0%, #059669 100%); border: none; color: #fff; }
+        .btn-saida { background: linear-gradient(135deg, #ef4444 0%, #dc2626 100%); border: none; color: #fff; }
+        .btn-entrada:hover, .btn-saida:hover { opacity: 0.9; color: #fff; }
+        @media print {
+            body * { visibility: hidden; }
+            #areaImpressao, #areaImpressao * { visibility: visible; }
+            #areaImpressao { position: absolute; left: 0; top: 0; width: 100%; color: #000; background: #fff; padding: 20px; }
+        }
+    </style>
+</head>
+<body class="py-4">
+
+    <!-- Notificações Toast -->
+    <div class="toast-container position-fixed bottom-0 end-0 p-3" style="z-index: 1080;">
+        <div id="liveToast" class="toast align-items-center text-white border-0" role="alert" aria-live="assertive" aria-atomic="true">
+            <div class="d-flex">
+                <div class="toast-body fs-6" id="toastMensagem">Mensagem</div>
+                <button type="button" class="btn-close btn-close-white me-2 m-auto" data-bs-dismiss="toast"></button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Comprovante de Impressão -->
+    <div id="areaImpressao" class="d-none">
+        <div class="text-center">
+            <h2>🚗 PARKMANAGER PRO</h2>
+            <p>Comprovante de Operação</p>
+            <hr>
+            <h3 id="printPlaca">PLACA: -</h3>
+            <h4 id="printModelo">MODELO: -</h4>
+            <p id="printTipo">Tipo: -</p>
+            <p id="printEntrada">Entrada: -</p>
+            <p id="printSaida">Saída: -</p>
+            <h2 id="printValor">Total: R$ 0,00</h2>
+            <hr>
+            <p>Obrigado e volte sempre!</p>
+        </div>
+    </div>
+
+    <div class="container">
+        <!-- Cabeçalho -->
+        <header class="d-flex justify-content-between align-items-center mb-4">
+            <div>
+                <h2 class="fw-bold mb-0 text-white"><i class="bi bi-shield-check text-warning me-2"></i>ParkManager Enterprise</h2>
+                <small class="text-muted">Sistema Integrado de Controle de Acesso | <span id="relogio" class="text-info font-monospace">00:00:00</span></small>
+            </div>
+            <div class="d-flex gap-2">
+                <button class="btn btn-outline-warning btn-sm rounded-pill px-3" data-bs-toggle="modal" data-bs-target="#modalTarifas" onclick="carregarTarifasModal()">
+                    <i class="bi bi-gear me-1"></i> Configurar Tarifas
+                </button>
+                <a href="/api/exportar-csv" class="btn btn-outline-light btn-sm rounded-pill px-3">
+                    <i class="bi bi-download me-1"></i> Exportar CSV
+                </a>
+            </div>
+        </header>
+
+        <!-- Cards do Dashboard -->
+        <div class="row g-3 mb-4">
+            <div class="col-md-3">
+                <div class="glass-card stat-card p-3">
+                    <div class="d-flex justify-content-between align-items-center">
+                        <div>
+                            <span class="text-muted small">VEÍCULOS NO PÁTIO</span>
+                            <h2 id="statEstacionados" class="fw-bold mb-0 text-info">0</h2>
+                        </div>
+                        <div class="p-3 bg-info bg-opacity-10 rounded-circle"><i class="bi bi-car-front-fill fs-2 text-info"></i></div>
+                    </div>
+                </div>
+            </div>
+            <div class="col-md-3">
+                <div class="glass-card stat-card p-3">
+                    <div class="d-flex justify-content-between align-items-center">
+                        <div>
+                            <span class="text-muted small">VAGAS LIVRES</span>
+                            <h2 id="statVagas" class="fw-bold mb-0 text-success">0</h2>
+                        </div>
+                        <div class="p-3 bg-success bg-opacity-10 rounded-circle"><i class="bi bi-check-circle-fill fs-2 text-success"></i></div>
+                    </div>
+                </div>
+            </div>
+            <div class="col-md-3">
+                <div class="glass-card stat-card p-3">
+                    <div class="d-flex justify-content-between align-items-center">
+                        <div>
+                            <span class="text-muted small">FATURAMENTO HOJE</span>
+                            <h2 id="statFaturamento" class="fw-bold mb-0 text-warning">R$ 0,00</h2>
+                        </div>
+                        <div class="p-3 bg-warning bg-opacity-10 rounded-circle"><i class="bi bi-cash-coin fs-2 text-warning"></i></div>
+                    </div>
+                </div>
+            </div>
+            <div class="col-md-3">
+                <div class="glass-card stat-card p-3">
+                    <div class="d-flex justify-content-between align-items-center">
+                        <div>
+                            <span class="text-muted small">ATENDIMENTOS HOJE</span>
+                            <h2 id="statAtendimentos" class="fw-bold mb-0 text-white">0</h2>
+                        </div>
+                        <div class="p-3 bg-primary bg-opacity-10 rounded-circle"><i class="bi bi-receipt fs-2 text-primary"></i></div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Indicador Visual de Ocupação -->
+        <div class="glass-card p-3 mb-4">
+            <div class="d-flex justify-content-between align-items-center mb-1">
+                <small class="text-muted">Taxa de Ocupação do Pátio</small>
+                <small id="textoPorcentagem" class="fw-bold text-info">0%</small>
+            </div>
+            <div class="progress bg-dark" style="height: 10px;">
+                <div id="barraOcupacao" class="progress-bar bg-info" role="progressbar" style="width: 0%"></div>
+            </div>
+        </div>
+
+        <!-- Terminal de Lançamento -->
+        <div class="glass-card p-4 mb-4">
+            <h5 class="fw-bold mb-3 text-white"><i class="bi bi-plus-circle me-2 text-primary"></i>Registrar Operação</h5>
+            <div class="row g-3">
+                <div class="col-md-3">
+                    <label class="form-label text-muted small mb-1">Placa do Veículo</label>
+                    <input type="text" id="placaInput" oninput="checarPreviaSaida()" class="form-control form-control-lg text-uppercase" placeholder="EX: ABC1D23" maxlength="8">
+                </div>
+                <div class="col-md-3">
+                    <label class="form-label text-muted small mb-1">Modelo do Veículo</label>
+                    <input type="text" id="modeloInput" class="form-control form-control-lg" placeholder="EX: Gol, Civic, Biz...">
+                </div>
+                <div class="col-md-2">
+                    <label class="form-label text-muted small mb-1">Tipo</label>
+                    <select id="tipoInput" class="form-select form-select-lg">
+                        <option value="carro">🚗 Carro</option>
+                        <option value="moto">🏍️ Moto</option>
+                        <option value="caminhao">🚚 Caminhão</option>
+                    </select>
+                </div>
+                <div class="col-md-4 d-flex align-items-end gap-2">
+                    <button onclick="registrarEntrada()" class="btn btn-entrada btn-lg w-100 fw-bold"><i class="bi bi-box-arrow-in-right me-1"></i> Entrada</button>
+                    <button onclick="registrarSaida()" class="btn btn-saida btn-lg w-100 fw-bold"><i class="bi bi-box-arrow-left me-1"></i> Saída</button>
+                </div>
+            </div>
+            <div id="boxPrevia" class="alert alert-info mt-3 mb-0 d-none bg-info bg-opacity-10 border-info text-info">
+                <i class="bi bi-calculator me-2"></i><span id="textoPrevia">Calculando estimativa...</span>
+            </div>
+        </div>
+
+        <!-- Tabela de Movimentações -->
+        <div class="glass-card p-4">
+            <div class="d-flex flex-wrap justify-content-between align-items-center gap-3 mb-3">
+                <h5 class="fw-bold mb-0 text-white"><i class="bi bi-list-stars me-2 text-warning"></i>Histórico e Movimentações</h5>
+                
+                <div class="d-flex gap-2">
+                    <div class="btn-group btn-group-sm" role="group">
+                        <button type="button" class="btn btn-outline-secondary active" onclick="filtrarStatus('todos', this)">Todos</button>
+                        <button type="button" class="btn btn-outline-secondary" onclick="filtrarStatus('patio', this)">No Pátio</button>
+                        <button type="button" class="btn btn-outline-secondary" onclick="filtrarStatus('finalizados', this)">Finalizados</button>
+                    </div>
+                    <input type="text" id="buscaInput" onkeyup="renderizarTabela()" class="form-control form-control-sm" placeholder="🔍 Procurar por placa ou modelo...">
+                </div>
+            </div>
+
+            <div class="table-responsive">
+                <table class="table table-custom align-middle">
+                    <thead>
+                        <tr class="text-muted small">
+                            <th>ID</th>
+                            <th>PLACA</th>
+                            <th>MODELO</th>
+                            <th>TIPO</th>
+                            <th>ENTRADA</th>
+                            <th>SAÍDA</th>
+                            <th>VALOR PAGO</th>
+                            <th>STATUS</th>
+                            <th class="text-end">AÇÕES</th>
+                        </tr>
+                    </thead>
+                    <tbody id="tabelaCorpo"></tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+
+    <!-- Modal Configuração de Tarifas -->
+    <div class="modal fade" id="modalTarifas" tabindex="-1">
+        <div class="modal-dialog modal-dialog-centered">
+            <div class="modal-content bg-dark text-white border-secondary">
+                <div class="modal-header border-secondary">
+                    <h5 class="modal-title"><i class="bi bi-gear me-2"></i> Configurar Tarifas (R$/Hora)</h5>
+                    <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+                </div>
+                <div class="modal-body">
+                    <div class="mb-3">
+                        <label class="form-label">🚗 Carro</label>
+                        <input type="number" id="tarifaCarro" class="form-control" step="0.50">
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label">🏍️ Moto</label>
+                        <input type="number" id="tarifaMoto" class="form-control" step="0.50">
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label">🚚 Caminhão</label>
+                        <input type="number" id="tarifaCaminhao" class="form-control" step="0.50">
+                    </div>
+                </div>
+                <div class="modal-footer border-secondary">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
+                    <button type="button" onclick="salvarTarifas()" class="btn btn-primary">Salvar Alterações</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+    <script>
+        const API_URL = '/api';
+        let dadosMovimentacoes = [];
+        let filtroStatusAtual = 'todos';
+
+        setInterval(() => {
+            document.getElementById('relogio').innerText = new Date().toLocaleTimeString('pt-BR');
+        }, 1000);
+
+        function mostrarToast(mensagem, tipo = 'success') {
+            const toastEl = document.getElementById('liveToast');
+            const msgEl = document.getElementById('toastMensagem');
+            toastEl.className = `toast align-items-center text-white border-0 bg-${tipo}`;
+            msgEl.innerText = mensagem;
+            const toast = new bootstrap.Toast(toastEl);
+            toast.show();
+        }
+
+        function formatarMoeda(valor) {
+            if (valor === null || valor === undefined) return '-';
+            return valor.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
+        }
+
+        async function carregarDados() {
+            const resDash = await fetch(`${API_URL}/dashboard`);
+            const dash = await resDash.json();
+            document.getElementById('statEstacionados').innerText = dash.vagas_ocupadas;
+            document.getElementById('statVagas').innerText = `${dash.vagas_livres} / ${dash.total_vagas}`;
+            document.getElementById('statFaturamento').innerText = formatarMoeda(dash.faturamento_hoje);
+            document.getElementById('statAtendimentos').innerText = dash.atendimentos_hoje;
+
+            const porcentagem = Math.round((dash.vagas_ocupadas / dash.total_vagas) * 100);
+            const barra = document.getElementById('barraOcupacao');
+            barra.style.width = `${porcentagem}%`;
+            document.getElementById('textoPorcentagem').innerText = `${porcentagem}%`;
+            
+            if (porcentagem > 85) barra.className = 'progress-bar bg-danger';
+            else if (porcentagem > 50) barra.className = 'progress-bar bg-warning';
+            else barra.className = 'progress-bar bg-info';
+
+            const resMov = await fetch(`${API_URL}/movimentacoes`);
+            dadosMovimentacoes = await resMov.json();
+            renderizarTabela();
+        }
+
+        function renderizarTabela() {
+            const tbody = document.getElementById('tabelaCorpo');
+            const termoBusca = document.getElementById('buscaInput').value.toUpperCase();
+            tbody.innerHTML = '';
+
+            const filtrados = dadosMovimentacoes.filter(mov => {
+                const coincidePlaca = mov.placa.includes(termoBusca);
+                const coincideModelo = (mov.modelo || '').toUpperCase().includes(termoBusca);
+                const estaNoPatio = !mov.data_saida;
+
+                if (!coincidePlaca && !coincideModelo) return false;
+                if (filtroStatusAtual === 'patio') return estaNoPatio;
+                if (filtroStatusAtual === 'finalizados') return !estaNoPatio;
+                return true;
+            });
+
+            filtrados.forEach(mov => {
+                const tr = document.createElement('tr');
+                const estaPresente = !mov.data_saida;
+                
+                tr.innerHTML = `
+                    <td>#${mov.id}</td>
+                    <td><strong class="fs-6 text-white">${mov.placa}</strong></td>
+                    <td><span class="text-white-50">${mov.modelo || '-'}</span></td>
+                    <td><span class="badge bg-secondary text-capitalize">${mov.tipo === 'caminhao' ? 'caminhão' : mov.tipo}</span></td>
+                    <td><small class="text-muted">${mov.data_entrada}</small></td>
+                    <td><small class="text-muted">${mov.data_saida || '-'}</small></td>
+                    <td><strong class="text-warning">${formatarMoeda(mov.valor_pago)}</strong></td>
+                    <td>
+                        <span class="badge rounded-pill ${estaPresente ? 'bg-success bg-opacity-20 text-success border border-success' : 'bg-secondary'}">
+                            ${estaPresente ? '• No Pátio' : 'Finalizado'}
+                        </span>
+                    </td>
+                    <td class="text-end">
+                        ${estaPresente ? `<button onclick="saidaRapida('${mov.placa}')" class="btn btn-sm btn-outline-danger me-1" title="Dar Saída"><i class="bi bi-box-arrow-left"></i> Saída</button>` : ''}
+                        <button onclick="imprimirTicket(${mov.id})" class="btn btn-sm btn-outline-light me-1" title="Imprimir Comprovante"><i class="bi bi-printer"></i></button>
+                        <button onclick="deletarRegistro(${mov.id})" class="btn btn-sm btn-outline-danger" title="Excluir Registro"><i class="bi bi-trash"></i></button>
+                    </td>
+                `;
+                tbody.appendChild(tr);
+            });
+        }
+
+        async function checarPreviaSaida() {
+            const placa = document.getElementById('placaInput').value.trim();
+            const box = document.getElementById('boxPrevia');
+            const texto = document.getElementById('textoPrevia');
+
+            if (placa.length < 3) {
+                box.classList.add('d-none');
+                return;
+            }
+
+            try {
+                const res = await fetch(`${API_URL}/previa-saida?placa=${placa}`);
+                if (res.ok) {
+                    const data = await res.json();
+                    const infoModelo = data.modelo ? ` (${data.modelo})` : '';
+                    if (data.tolerancia) {
+                        texto.innerHTML = `Veículo ${data.placa}${infoModelo} em tempo de <strong>tolerância grátis</strong> (${data.minutos_totais} min). Valor estimado: <strong>R$ 0,00</strong>`;
+                    } else {
+                        texto.innerHTML = `Veículo ${data.placa}${infoModelo} no pátio há <strong>${data.minutos_totais} min</strong> (~${data.horas}h cobrada/s). Valor estimado: <strong>${formatarMoeda(data.valor_estimado)}</strong>`;
+                    }
+                    box.classList.remove('d-none');
+                } else {
+                    box.classList.add('d-none');
+                }
+            } catch (err) {
+                box.classList.add('d-none');
+            }
+        }
+
+        async function registrarEntrada() {
+            const placa = document.getElementById('placaInput').value;
+            const modelo = document.getElementById('modeloInput').value;
+            const tipo = document.getElementById('tipoInput').value;
+            if (!placa) return mostrarToast('Por favor, informe a placa!', 'warning');
+
+            const res = await fetch(`${API_URL}/entrada?placa=${placa}&modelo=${encodeURIComponent(modelo)}&tipo=${tipo}`, { method: 'POST' });
+            const data = await res.json();
+
+            if (res.ok) {
+                mostrarToast(data.message, 'success');
+                document.getElementById('placaInput').value = '';
+                document.getElementById('modeloInput').value = '';
+                document.getElementById('boxPrevia').classList.add('d-none');
+                carregarDados();
+            } else {
+                mostrarToast(data.detail, 'danger');
+            }
+        }
+
+        async function registrarSaida() {
+            const placa = document.getElementById('placaInput').value;
+            if (!placa) return mostrarToast('Por favor, informe a placa!', 'warning');
+
+            const res = await fetch(`${API_URL}/saida?placa=${placa}`, { method: 'POST' });
+            const data = await res.json();
+
+            if (res.ok) {
+                mostrarToast(`Saída concluída! Total pago: ${formatarMoeda(data.valor_pago)}`, 'success');
+                document.getElementById('placaInput').value = '';
+                document.getElementById('modeloInput').value = '';
+                document.getElementById('boxPrevia').classList.add('d-none');
+                carregarDados();
+            } else {
+                mostrarToast(data.detail, 'danger');
+            }
+        }
+
+        async function saidaRapida(placa) {
+            document.getElementById('placaInput').value = placa;
+            await registrarSaida();
+        }
+
+        async function deletarRegistro(id) {
+            if (!confirm('Tem certeza que deseja apagar este registro?')) return;
+            const res = await fetch(`${API_URL}/movimentacoes/${id}`, { method: 'DELETE' });
+            if (res.ok) {
+                mostrarToast('Registro removido!', 'secondary');
+                carregarDados();
+            }
+        }
+
+        async function carregarTarifasModal() {
+            const res = await fetch(`${API_URL}/tarifas`);
+            const data = await res.json();
+            document.getElementById('tarifaCarro').value = data.carro;
+            document.getElementById('tarifaMoto').value = data.moto;
+            document.getElementById('tarifaCaminhao').value = data.caminhao;
+        }
+
+        async function salvarTarifas() {
+            const payload = {
+                carro: parseFloat(document.getElementById('tarifaCarro').value),
+                moto: parseFloat(document.getElementById('tarifaMoto').value),
+                caminhao: parseFloat(document.getElementById('tarifaCaminhao').value)
+            };
+
+            const res = await fetch(`${API_URL}/tarifas`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(payload)
+            });
+
+            if (res.ok) {
+                mostrarToast('Tarifas atualizadas!', 'success');
+                bootstrap.Modal.getInstance(document.getElementById('modalTarifas')).hide();
+            }
+        }
+
+        function filtrarStatus(status, btn) {
+            filtroStatusAtual = status;
+            document.querySelectorAll('.btn-group .btn').forEach(b => b.classList.remove('active'));
+            btn.classList.add('active');
+            renderizarTabela();
+        }
+
+        function imprimirTicket(id) {
+            const mov = dadosMovimentacoes.find(m => m.id === id);
+            if (!mov) return;
+
+            document.getElementById('printPlaca').innerText = `PLACA: ${mov.placa}`;
+            document.getElementById('printModelo').innerText = `MODELO: ${mov.modelo || '-'}`;
+            document.getElementById('printTipo').innerText = `Tipo: ${(mov.tipo === 'caminhao' ? 'caminhão' : mov.tipo).toUpperCase()}`;
+            document.getElementById('printEntrada').innerText = `Entrada: ${mov.data_entrada}`;
+            document.getElementById('printSaida').innerText = `Saída: ${mov.data_saida || 'Ainda no pátio'}`;
+            document.getElementById('printValor').innerText = mov.valor_pago !== null ? `Total: ${formatarMoeda(mov.valor_pago)}` : 'Em aberto';
+
+            const area = document.getElementById('areaImpressao');
+            area.classList.remove('d-none');
+            window.print();
+            area.classList.add('d-none');
+        }
+
+        carregarDados();
+    </script>
+</body>
+</html>
